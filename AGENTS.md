@@ -18,6 +18,15 @@ This repository uses GNU Autotools and builds the `iperf3` CLI plus `libiperf`.
 - Search existing upstream work first and follow `.github/CONTRIBUTING.md` and repository templates.
 - Never publish external repository content without the user's approval of the exact target and final draft.
 
+### Upstream Submission Boundaries
+
+- Use GitHub Discussions or `iperf-dev@googlegroups.com` for support and usage questions, not the issue tracker.
+- Prefer focused pull requests for fixes and improvements.
+- Discuss architecture-impacting changes with maintainers before substantial implementation.
+- Upstream accepts Linux, FreeBSD, and macOS as supported targets; other UNIX-like systems are best effort.
+- Windows, iOS, and Android are not supported upstream.
+- Treat the enhancement-license terms quoted in `.github/CONTRIBUTING.md` as part of every submission decision.
+
 ## Architecture & Data Flow
 
 - `src/main.c` is the executable entry point and delegates CLI behavior to libiperf.
@@ -52,6 +61,27 @@ src/iperf3 --version
 Use repository-owned Autotools entry points.
 Do not hand-edit generated `configure`, `Makefile.in`, or `src/Makefile.in` without updating their owning inputs.
 
+## Important Files
+
+- `configure.ac`: authoritative feature, dependency, platform, and generated-config checks.
+- `Makefile.am` and `src/Makefile.am`: authoritative build, distribution, and test target definitions.
+- `src/iperf_api.h`: public libiperf API and externally consumed constants and types.
+- `src/iperf.h`: internal test state, protocol structures, defaults, and shared declarations.
+- `src/iperf_locale.c`: user-facing messages, help, and error strings.
+- `src/iperf_time.c` and `src/timer.c`: timing and scheduled-callback foundations.
+- `src/iperf_auth.c`: authentication, key loading, token processing, and OpenSSL-backed behavior.
+- `.github/CONTRIBUTING.md`: upstream support, submission, licensing, and conduct guidance.
+
+## Runtime & Compatibility Boundaries
+
+- Maintain iperf3 compatibility, not iperf2 compatibility; the protocols and implementations are separate.
+- Preserve client/server negotiation across mixed iperf3 versions unless an intentional protocol change is approved.
+- Consider TCP, UDP, SCTP, reverse mode, bidirectional mode, parallel streams, JSON, and JSON streaming at affected seams.
+- Keep optional OpenSSL, SCTP, CPU affinity, sendfile, and platform capabilities behind established configure checks.
+- Do not assume a Linux-only socket option or errno on FreeBSD and macOS paths.
+- Treat measurement timing, pacing, counters, units, and omitted/retransmit accounting as correctness-sensitive.
+- Avoid blocking work in event-driven test loops unless the surrounding lifecycle explicitly owns it.
+
 ## Code Conventions
 
 - Match the surrounding C style and preserve supported-platform conditionals.
@@ -68,6 +98,16 @@ Do not hand-edit generated `configure`, `Makefile.in`, or `src/Makefile.in` with
 - Exercise both client and server sides for changes to control messages, state transitions, or protocol behavior.
 - Verify JSON output when changing result fields or serialization.
 - Test platform-specific changes on their owning platform or state the exact verification gap.
+
+## Change-Specific Verification
+
+- CLI grammar or help: compare parser behavior, `iperf3 --help`, and the `iperf3.1` manual source.
+- Public API: build examples and check declarations, symbol ownership, documentation, and downstream compatibility.
+- TCP or UDP transport: run a loopback server/client pair and cover the changed direction and stream count.
+- Authentication: run `auth_test.sh` with the configured OpenSSL feature path.
+- Command scenarios: run `test_commands.sh` after building `src/iperf3`.
+- Timing or throughput calculations: inspect interval and final summaries for plausible units, duration, and totals.
+- Memory or lifecycle work: verify normal completion, control-channel failure, early termination, and cleanup paths.
 
 <essential-rule>
 AGENTS.md is the sole authoritative project context file.
