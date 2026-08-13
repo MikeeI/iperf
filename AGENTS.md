@@ -17,6 +17,18 @@ This repository uses GNU Autotools and builds the `iperf3` CLI plus `libiperf`.
 - Apply `skill-maintainer-communication` before external issues, pull requests, comments, reviews, or discussions.
 - Search existing upstream work first and follow `.github/CONTRIBUTING.md` and repository templates.
 - Never publish external repository content without the user's approval of the exact target and final draft.
+- The goal is to support upstream with evidence-backed, high-ROI issues, comments, and pull requests.
+- `ISSUES.md` owns the compact finding overview and global ID allocator.
+- Each `issues/ISSUE-NNN.md` owns the complete durable record for one root cause.
+- `FORMAT.md` owns research, lifecycle, drafting, implementation authorization, and publication rules.
+- Prefer a pull request for a bounded verified fix with no active implementation.
+- Otherwise prefer a useful existing-thread comment, then a new issue, then Hold.
+- Never choose Report or Pull request mode on the user's behalf.
+- Report mode permits research, issues, and comments but no source implementation.
+- Pull request mode authorizes only the implementation scope recorded for that finding.
+- Apply `skill-semantic-compression-3-0` when authoring or restructuring tracking content.
+- Apply `skill-git-commit-format` before each coherent commit.
+- Keep `FORMAT.md`, `ISSUES.md`, `issues/`, and fork-only commits out of upstream contribution diffs.
 
 ### Upstream Submission Boundaries
 
@@ -26,6 +38,31 @@ This repository uses GNU Autotools and builds the `iperf3` CLI plus `libiperf`.
 - Upstream accepts Linux, FreeBSD, and macOS as supported targets; other UNIX-like systems are best effort.
 - Windows, iOS, and Android are not supported upstream.
 - Treat the enhancement-license terms quoted in `.github/CONTRIBUTING.md` as part of every submission decision.
+
+## Finding and Contribution Ledger
+
+- Agents MUST read root `ISSUES.md` before repository work.
+- `ISSUES.md` owns `Next finding ID` and the compact cross-finding overview.
+- Each `issues/ISSUE-NNN.md` owns one finding's state, mode, evidence, Resume, drafts, and location.
+- Before allocating, search the index and relevant records for the same symptom and root cause.
+- New findings use the current `Next finding ID`, starting with permanent ID `ISSUE-001`.
+- Create the issue file, add its index row, and increment the allocator in one change.
+- Update the issue file and index together after state, mode, target, priority, Resume, or location changes.
+- New findings start with `State: Hold`, `Mode: Undecided`, `Target: Undecided`, and `Location: Not published.`.
+- Hold findings while currentness, prior art, reach, impact, target, or correction value remains unresolved.
+- Label material claims `[O]`, `[S]`, `[A]`, or `[N]` according to `FORMAT.md`.
+- The user selects Report or Pull request mode for each finding.
+- Pull request work reaches Ready only after implementation, focused verification, commit, push, and an exact draft.
+- Run the bundled read-only ledger validator after every ledger mutation.
+- Record every final external URL in `Location` immediately after publication.
+
+### External Publication Approval
+
+Only an external issue, comment, review, discussion, or pull request write is approval-gated.
+Show the exact current target and complete draft before publication.
+Publish only after the user approves that exact target and draft.
+Any target or draft change requires a new complete review.
+Fork commits, pushes, tracking updates, and authorized source implementation do not require publication approval.
 
 ## Architecture & Data Flow
 
