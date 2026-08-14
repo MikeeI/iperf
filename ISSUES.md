@@ -37,8 +37,8 @@ Next finding ID: ISSUE-027
 | [ISSUE-022](issues/ISSUE-022.md) | UDP GSO/GRO: effective mmap length is lost | Hold | Undecided | Undecided | High | Record effective mmap length | Not published. |
 | [ISSUE-023](issues/ISSUE-023.md) | Defaults initialization: freed protocol nodes remain linked | Hold | Undecided | Undecided | High | Inject protocol rollback failures | Not published. |
 | [ISSUE-024](issues/ISSUE-024.md) | JSON lifecycle: failed aggregates lack rollback | Hold | Undecided | Undecided | Medium | Inject aggregate ownership failures | Not published. |
-| [ISSUE-025](issues/ISSUE-025.md) | API setters: owned values leak on replacement | Hold | Undecided | Undecided | Medium | Reproduce setter replacement leaks | Not published. |
-| [ISSUE-026](issues/ISSUE-026.md) | Test destruction: pidfile and authorized-users survive free | Hold | Undecided | Undecided | Low | Confirm destructor ownership | Not published. |
+| [ISSUE-025](issues/ISSUE-025.md) | API setters: owned values leak on replacement | Hold | Undecided | Undecided | Medium | Exercise replacement ownership matrix | Not published. |
+| [ISSUE-026](issues/ISSUE-026.md) | Test destruction: pidfile and authorized-users survive free | Hold | Undecided | Undecided | Low | Confirm final destructor fields | Not published. |
 
 ## Terminal
 

@@ -13,59 +13,53 @@ Source: `upstream/master@c9b74229d0d9bfec6d2307b66b43c29a7665ad0b`
 
 ## Root
 
-[S] `test->pidfile` is heap-owned from `strdup(optarg)` in the `--pidfile` parser case (`src/iperf_api.c:1698-1700`), but `iperf_free_test()` never frees it (`src/iperf_api.c:3567-3701`).
+[S] The terminal field-release inventory in `iperf_free_test()` omits two heap-owned test members: `test->pidfile`, assigned by `strdup(optarg)` for `--pidfile` (`src/iperf_api.c:1698-1700`), and, with `HAVE_SSL`, `test->server_authorized_users`, assigned by its public setter and `--authorized-users-path` parser (`766-769,1757-1759`).
 
-[S] With `HAVE_SSL`, `test->server_authorized_users` is heap-owned by both the public setter (`src/iperf_api.c:766-769`) and `--authorized-users-path` parser case (`src/iperf_api.c:1757-1759`), but `iperf_free_test()` omits it while freeing the other listed authentication fields (`src/iperf_api.c:3598-3616`).
-
-[S] The root is two terminal destructor omissions: the test object owns these final allocations, but its sole public destructor does not release them.
+[S] `iperf_free_test()` frees neither member while releasing peer fields and then the test (`src/iperf_api.c:3567-3701`). The one root is incomplete terminal destruction of final test-owned fields, not repeated replacement behavior.
 
 ## Reach and impact
 
-[S] The normal CLI path calls `iperf_delete_pidfile()` after client/server work (`src/main.c:194,203`) and later calls `iperf_free_test(test)` (`src/main.c:124-129`). `iperf_delete_pidfile()` only unlinks the pathname; it does not free `test->pidfile`: `src/iperf_api.c:5431-5440`.
+[S] The normal CLI path calls `iperf_delete_pidfile()` after client/server work (`src/main.c:194,203`) and later calls `iperf_free_test(test)` (`124-129`). `iperf_delete_pidfile()` unlinks the pathname only; it does not release `test->pidfile` (`src/iperf_api.c:5431-5440`).
 
-[S] Libiperf exposes `iperf_free_test()` as the termination call (`src/iperf_api.h:284-289`; `src/libiperf.3:18-22,67-103`), so embedding applications retain these allocations for a test object's lifetime even when they follow the documented destruction path.
+[S] Libiperf exposes `iperf_free_test()` as the terminal resource disposer (`src/iperf_api.h:284-289`; `src/libiperf.3:67-103`). Embedding applications therefore retain the omitted allocation for a test object's lifetime even when following the normal destructor path.
 
-[S] This is normally at most one final `pidfile` allocation and, with `HAVE_SSL`, one final authorized-users allocation per test object unless replacement leaks occur; those repeated-replacement losses are separately owned by ISSUE-025.
+[S] The bound is one final `pidfile` allocation and, in an SSL build, one final authorized-users allocation per object. Prior allocations lost by repeated replacement are owned by ISSUE-025.
 
-[N] Allocation size, long-lived embedding frequency, and operational effect are unmeasured. No user-visible bug reproduction is recorded.
+[N] Allocation size, long-lived embedding frequency, operational effect, and user-visible impact are unmeasured.
 
 ## Evidence
 
-[S] `iperf_free_test()` explicitly frees many top-level strings and client authentication/RSA values before freeing settings and the test (`src/iperf_api.c:3578-3629,3693-3701`), establishing field-by-field destruction ownership while leaving both subject fields absent.
+[S] `iperf_free_test()` explicitly releases top-level strings, authentication fields, RSA keys, output text, JSON output, and settings before `free(test)` (`src/iperf_api.c:3578-3701`), but contains no release of either subject member.
 
-[S] The parser validates `test->server_authorized_users` as a readable server file and keeps its string for later use (`src/iperf_api.c:1876-1906`), confirming that it is test-owned state rather than a transient parser buffer.
+[S] The authorized-users parser validates the stored path as a readable server file and retains it for later use (`src/iperf_api.c:1876-1906`), confirming test ownership rather than a transient parse buffer.
 
-[S] Excluded: `test->diskfile_name` is assigned directly from `optarg`, not duplicated (`src/iperf_api.c:1582-1584`). It is argv-aliased storage and must not be freed by `iperf_free_test()`.
-
-[O] Recorded baseline: `make check` — `5/5 pass`. It does not inspect final test-object ownership under the destructor.
+[S] Excluded: `test->diskfile_name` is assigned directly from `optarg`, not duplicated (`src/iperf_api.c:1582-1584`). It aliases argv storage, is not owned by the test, and must not be freed by `iperf_free_test()`.
 
 ## Prior art
 
 [S] Recorded audit candidates are https://github.com/esnet/iperf/issues/1986, active https://github.com/esnet/iperf/pull/1654, and https://github.com/esnet/iperf/pull/1861 for worker-failure propagation; https://github.com/esnet/iperf/pull/1709 introduced the 8-KiB parameter receive cap. None owns final destruction of these two fields.
 
-[N] No targeted current upstream issue/PR search for `pidfile` or `server_authorized_users` destructor ownership is recorded here. No external target is selected.
+[N] No targeted current upstream issue/PR search for `pidfile` or `server_authorized_users` destructor ownership is recorded. No external target is selected.
 
 ## Direction
 
-[A] In `iperf_free_test()`, release and clear `test->pidfile`; under `HAVE_SSL`, release and clear `test->server_authorized_users` alongside its peer authentication fields.
-
-[A] Keep pathname unlinking owned by `iperf_delete_pidfile()`; destruction should release only the stored path string and must not add a new filesystem-unlink side effect.
+[A] In `iperf_free_test()`, free `test->pidfile` and, under `HAVE_SSL`, `test->server_authorized_users` alongside their comparable owned fields. This terminal correction releases storage only; it does not add pathname unlinking or alter authorized-users validation.
 
 ## Bounds
 
-[S] Preserve `iperf_delete_pidfile()` return/error semantics, explicit CLI pidfile lifecycle, public destructor signature, and OpenSSL feature guards.
+[S] Preserve `iperf_delete_pidfile()` return/error semantics, the explicit CLI pidfile lifecycle, public destructor signature, and OpenSSL feature guards.
 
-[S] Do not free `diskfile_name`: it aliases argv storage. Do not combine this final-value cleanup with ISSUE-025's per-replacement behavior.
+[S] Do not free `diskfile_name`: it is argv-aliased and non-owned. Do not combine final-value destruction with ISSUE-025's per-replacement behavior.
 
-[N] The correction must not claim to reclaim process-exit memory or alter auth-file validation semantics without measurement.
+[N] This bounded final-destructor correction does not claim to reclaim process-exit memory, change reset/reuse behavior, or alter auth-file validation.
 
 ## API and compatibility
 
-Callers [S]: public libiperf callers use `iperf_free_test()` after `iperf_new_test()` (`src/iperf_api.h:275-289`; `src/libiperf.3:67-103`); OpenSSL users may configure authorized users through the public setter in `src/iperf_api.h:230-238`.
+Callers [S]: public libiperf callers dispose a test through `iperf_free_test()` (`src/iperf_api.h:275-289`; `src/libiperf.3:67-103`); OpenSSL callers can set authorized users through `src/iperf_api.h:230-238`.
 
-Contract [S]: `iperf_free_test()` is documented to free test resources; its existing caller-visible behavior does not unlink a pidfile.
+Contract [S]: `iperf_free_test()` releases test resources and does not unlink a pidfile.
 
-Compatibility: Keep the `void` destructor API and all file/auth behavior; only release memory that the test itself allocated.
+Compatibility: Keep the `void` destructor API and all file/auth behavior; release only storage allocated by the test.
 
 Migration: None.
 
@@ -73,16 +67,20 @@ Migration: None.
 
 Test decision: none. This is a ledger-only change; no source, test, validator, or gate was run.
 
-[A] In a non-SSL build, configure a heap-owned pidfile path, perform any required explicit `iperf_delete_pidfile()` call, then free the test under a leak detector and verify no unlink behavior changes.
+[N] In a non-SSL build, create/default a test, configure exactly one heap-owned pidfile path, exercise the explicit `iperf_delete_pidfile()` path with a real pidfile, then dispose the test under a leak detector. Verify the allocation is released and unlink behavior is unchanged.
 
-[A] In an OpenSSL build, configure authorized users through both setter and parser routes, free the test under a leak detector, and verify the auth path is freed while `diskfile_name` remains caller/argv-owned.
+[N] In an OpenSSL build, use the authorized-users setter and parser in separate single-assignment scenarios, then dispose each test under a leak detector. Verify the final auth-path allocation is released while `diskfile_name` remains unallocated by and untouched through the destructor.
+
+[N] No OOM injection is needed for this root: it concerns successful final allocations reaching the terminal destructor. Reuse and duplicate-assignment checks belong to ISSUE-025; do not use them to inflate this one-final-value finding.
 
 ## Missing
 
-[N] Targeted upstream prior-art currentness, dynamic destructor reproduction in non-SSL and OpenSSL builds, retained-allocation measurement, and a maintainer-selected correction/target remain unresolved.
+[N] No non-SSL pidfile or SSL authorized-users dynamic destructor result, pidfile-unlink regression result, targeted upstream prior-art currentness, retained-allocation measurement, or maintainer-selected correction/target is recorded.
 
 ## Resume
 
-Index: Confirm destructor ownership
-Next: At `upstream/master@c9b74229d0d9bfec6d2307b66b43c29a7665ad0b`, inspect the two destructor paths under a leak detector in non-SSL and OpenSSL builds while confirming pidfile unlink behavior is unchanged.
-Done when: Leak evidence distinguishes the two final owned values from argv aliases and confirms a destructor-only correction has no filesystem or authentication regression.
+Index: Confirm final destructor fields
+
+Next: Leak-check one pidfile case in a non-SSL build and one authorized-users case in an OpenSSL build.
+
+Done when: Dynamic results confirm the two final owned values are released, `diskfile_name` stays argv-owned, and pidfile unlink/auth behavior is unchanged.
