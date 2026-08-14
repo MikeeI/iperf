@@ -1,8 +1,8 @@
 # ISSUE-001 — JSON lifecycle: rendered output survives persistent server reset
 
-State: Hold
+State: Ready
 Mode: Pull request
-Target: Undecided
+Target: New pull request
 Location: Not published.
 Priority: High
 Confidence: High
@@ -33,18 +33,20 @@ Impact [O]: With identical 32-stream, 1-second localhost tests, full JSON increa
 - [O] The process heap mapping RSS was 12 KiB at run 0, 700 KiB at run 10, 984 KiB at run 20, and 1,612 KiB at run 40; runs 20–40 added 628 KiB, or 31.4 KiB/run.
 - [O] A matching one-off server document from `src/iperf3 -s -1 -J -p 55205 --logfile /tmp/iperf-json-size.json` was 32,134 bytes by `wc -c`, matching the warm retained-memory slope.
 - [O] Control=`src/iperf3 -s --json-stream -p 55203` with the same clients — total RSS was 3,708 KiB at run 0, 4,500 KiB at run 20, and 4,540 KiB at run 40; heap RSS was 12, 248, and 288 KiB. The warm 20–40 interval added only 2.0 KiB/run.
+- [N] GitHub Discussions and `iperf-dev` searches for `json_output_string`, JSON memory leaks, and persistent-server memory found no direct candidate on 2026-08-14.
 - [N] Upstream issue, PR, and commit searches for `json_output_string reset leak OR memory` and `json_output_string reset` returned no direct candidate on 2026-08-14.
 
 ## Prior art
 
 Coverage: GitHub issues(open+closed), PRs(open+closed+merged), and commit search; checked=2026-08-14.
-Gaps: GitHub Discussions, `iperf-dev` archives, releases, and active unpublished branches remain unchecked.
+Gaps: Release notes and active unpublished branches remain unchecked.
 
 - `https://github.com/esnet/iperf/pull/1098` — Related; introduced streaming JSON and deliberately discards streamed interval objects, but does not own the persistent full-output result-string reset.
 - `https://github.com/esnet/iperf/pull/1463` — Related; JSON logfile error-path fix, not this retained result-string lifecycle.
+- `https://github.com/esnet/iperf/pull/1712` — Distinct; frees strings replaced within parallel-stream setup, not the completed full JSON document replaced between persistent-server tests.
 - `https://github.com/esnet/iperf/pull/2034` — Distinct; fixes client file-descriptor leaks, not server JSON heap ownership.
 
-Target fit: New pull request recommended — runtime evidence confirms linear retained memory, the fix is lifecycle-local, and searched upstream work does not own this reset omission. Exact Target remains user-unselected.
+Target fit: New pull request — runtime evidence confirms linear retained memory, the correction is lifecycle-local, and searched upstream work does not own this reset omission.
 
 ## Direction
 
@@ -58,24 +60,24 @@ At the reset lifecycle owner, release `test->json_output_string` with the existi
 
 ## Verification
 
-- Start one persistent `src/iperf3 -s -J`; run many identical short clients; record process RSS and allocated-live bytes after every completed test.
-- Repeat with `--json-stream` and `--json-stream-full-output` to prove the exact affected-mode boundary.
-- Compare baseline and candidate memory slope under identical build, commands, run count, and environment.
-- Capture each emitted JSON document and compare it byte-for-byte before and after the correction.
-- Exercise successful completion, client failure, one-off server, callback output, getter-before-reset, and repeated reset.
-- Run `make check` and `test_commands.sh` after the focused scenario passes.
+- [O] On the baseline, full JSON warm runs 20–40 retained 628 KiB total and heap RSS, or 31.4 KiB/run.
+- [O] On the candidate, full JSON total RSS at runs 0, 20, 40, and 60 was `3672,4268,4576,4592 KiB`; heap RSS was `12,320,360,376 KiB`.
+- [O] Candidate warm runs 20–40 retained 40 KiB, or 2.0 KiB/run; runs 40–60 retained 16 KiB, or 0.8 KiB/run.
+- [O] `jq` normalization replacing scalar values with their JSON types produced identical sorted trees for baseline and candidate one-off full JSON documents.
+- [O] Two candidate `--json-stream --json-stream-full-output` runs emitted JSON accepted by `jq empty`.
+- [O] `make -s check` passed all five repository tests.
+- [O] `test_commands.sh 127.0.0.1` completed with status 0 in an isolated network namespace; IPv6 cases were unavailable with the IPv4-only target.
 
 ## Missing
 
-- [N] Candidate measurement proving flat retained-memory slope and unchanged JSON output.
-- [N] GitHub Discussions, mailing-list, release-note, and active-branch prior-art coverage.
-- [N] Exact Target selection; Mode is user-selected Pull request.
+- [N] FreeBSD and macOS runtime verification is unperformed; the correction uses the existing portable `free`-and-NULL ownership pattern.
+- [N] Release-note and active unpublished-branch prior-art coverage remains unchecked.
 
 ## Resume
 
-Index: Create JSON reset branch
-Next: Create a clean contribution branch from the recorded upstream revision and record the bounded reset-cleanup implementation scope.
-Done when: The contribution worktree is based on `upstream/master@c9b74229d0d9bfec6d2307b66b43c29a7665ad0b` with only ISSUE-001 source scope authorized.
+Index: Review exact JSON reset PR
+Next: Obtain approval for the recorded upstream target and exact pull request draft.
+Done when: The user approves the unchanged target and complete draft for publication.
 
 ## Bug reproduction
 
@@ -86,11 +88,11 @@ Expected: `iperf_reset_test` must release prior test-owned rendered output befor
 
 ## Performance evidence
 
-Workload: Persistent Linux server; identical localhost clients using `-t 1 -i 0.1 -P 32 -J`; RSS sampled after 0, 10, 20, and 40 completed tests. Default `--json-stream` repeated for 0, 20, and 40 as the non-full-output control.
-Baseline [O]: Full JSON total RSS=`3708,4684,5072,5700 KiB`; heap RSS=`12,700,984,1612 KiB`. Warm runs 20–40 retained 31.4 KiB/run; representative JSON size=32,134 bytes.
-Candidate [N]: Not implemented or measured.
-Guard [O]: Default `--json-stream` warm runs 20–40 added 40 KiB total RSS and heap, or 2.0 KiB/run; full JSON added 628 KiB over the same run interval.
-Boundary [O]: Linear retained memory is reproduced for plain full JSON on this Linux/glibc workload. `--json-stream-full-output`, candidate behavior, other allocators, and operational exhaustion time remain unmeasured.
+Workload: Persistent Linux server; identical localhost clients using `-t 1 -i 0.1 -P 32 -J`; RSS sampled after completed tests. Default `--json-stream` was the non-full-output control.
+Baseline [O]: Full JSON total RSS=`3708,4684,5072,5700 KiB` at runs 0, 10, 20, and 40; heap RSS=`12,700,984,1612 KiB`. Warm runs 20–40 retained 31.4 KiB/run; representative JSON size=32,134 bytes.
+Candidate [O]: Full JSON total RSS=`3672,4268,4576,4592 KiB` at runs 0, 20, 40, and 60; heap RSS=`12,320,360,376 KiB`. Warm slopes were 2.0 KiB/run for runs 20–40 and 0.8 KiB/run for runs 40–60.
+Guard [O]: Default baseline `--json-stream` warm runs 20–40 added 40 KiB total RSS and heap, or 2.0 KiB/run. Baseline and candidate one-off full JSON documents had identical sorted JSON structure and scalar types.
+Boundary [O]: The candidate removes the document-sized linear retained-memory slope on this Linux/glibc workload. Residual allocator RSS, other allocators, and FreeBSD/macOS runtime behavior remain outside the measurement.
 
 ## API and compatibility
 
@@ -98,3 +100,92 @@ Callers [S]: CLI persistent server loop and libiperf users that call `iperf_run_
 Contract [S]: The getter returns test-owned internal storage; `iperf_reset_test` begins a new test lifecycle and already invalidates other test-owned result state.
 Compatibility: Keep the result valid until reset; after reset, expose no stale pointer. Preserve wire protocol and emitted JSON.
 Migration: None.
+
+## Implementation
+
+Branch: `fix/json-output-reset`
+Base: `upstream/master@c9b74229d0d9bfec6d2307b66b43c29a7665ad0b`
+Scope: Release and clear the test-owned rendered JSON string in `iperf_reset_test`; no serialization, wire, output, or API changes.
+Commit: `3bb3582a128c6f90f8a368118f8271ea93ad4d42`
+Push: `MikeeI/iperf:fix/json-output-reset`
+Checks:
+- `persistent -J baseline/candidate RSS sampling` → warm retained-memory slope changed from 31.4 KiB/run to 2.0 then 0.8 KiB/run.
+- `jq -S 'walk(...)' baseline candidate | diff` → identical JSON structure and scalar types.
+- `--json-stream --json-stream-full-output` twice, then `jq empty` → valid streamed JSON.
+- `make -s check` → 5/5 tests passed.
+- `test_commands.sh 127.0.0.1` in an isolated network namespace → status 0; IPv6 unavailable for the IPv4-only target.
+
+## Draft
+
+Target: New pull request to `esnet/iperf:master` from `MikeeI:fix/json-output-reset`.
+
+Title: `Free rendered JSON output when resetting server tests`
+
+````markdown
+_PLEASE NOTE the following text from the iperf3 license.  Submitting a
+pull request to the iperf3 repository constitutes "[making]
+Enhancements available...publicly":_
+
+```
+You are under no obligation whatsoever to provide any bug fixes, patches, or
+upgrades to the features, functionality or performance of the source code
+("Enhancements") to anyone; however, if you choose to make your Enhancements
+available either publicly, or directly to Lawrence Berkeley National
+Laboratory, without imposing a separate written license agreement for such
+Enhancements, then you hereby grant the following license: a non-exclusive,
+royalty-free perpetual license to install, use, modify, prepare derivative
+works, incorporate into other computer software, distribute, and sublicense
+such enhancements or derivative works thereof, in binary and source code form.
+```
+
+_The complete iperf3 license is available in the `LICENSE` file in the
+top directory of the iperf3 source tree._
+
+* Version of iperf3 (or development branch, such as `master` or
+  `3.1-STABLE`) to which this pull request applies: `master` at `c9b74229d0d9bfec6d2307b66b43c29a7665ad0b`
+
+* Issues fixed (if any): None.
+
+* Brief description of code changes (suitable for use as a commit message):
+  Release the test-owned rendered JSON string when resetting a server test.
+
+## Summary
+
+A persistent server reuses one `iperf_test` across runs. Full JSON rendering stores a heap copy in `test->json_output_string`, but reset did not release it before the next result replaced the pointer. This change frees and clears that test-owned string in `iperf_reset_test`.
+
+## Evidence
+
+- [`iperf_json_finish`](https://github.com/esnet/iperf/blob/c9b74229d0d9bfec6d2307b66b43c29a7665ad0b/src/iperf_api.c#L5486-L5518) duplicates the rendered document into `json_output_string`.
+- [`iperf_reset_test`](https://github.com/esnet/iperf/blob/c9b74229d0d9bfec6d2307b66b43c29a7665ad0b/src/iperf_api.c#L3706-L3838) did not release that string before persistent-server reuse.
+- On Ubuntu 24.04.4/glibc, a persistent `-J` server receiving sequential one-second, 32-stream localhost tests retained 628 KiB over warm runs 20–40, or 31.4 KiB/run. A representative rendered document was 32,134 bytes.
+
+## Changes
+
+- Free and clear `json_output_string` at the reset lifecycle boundary.
+- Preserve the rendered result through the completed run and leave JSON serialization, emitted output, callbacks, protocol behavior, and the public getter unchanged.
+
+## Risks and boundaries
+
+- `iperf_reset_test` already invalidates test-owned result state for the next run; this applies the same lifetime to the rendered string.
+- The correction uses the destructor's existing `free`-and-NULL pattern and adds no new abstraction or platform-specific behavior.
+
+## Verification
+
+- Persistent full JSON candidate: warm RSS growth fell to 40 KiB over runs 20–40 and 16 KiB over runs 40–60, versus 628 KiB over baseline runs 20–40.
+- Baseline and candidate one-off documents had identical sorted JSON structure and scalar types after normalizing live values.
+- Two `--json-stream --json-stream-full-output` runs emitted JSON accepted by `jq empty`.
+- `make -s check` — 5/5 tests passed.
+- `test_commands.sh 127.0.0.1` — completed with status 0 in an isolated network namespace; IPv6 was unavailable for the IPv4-only target.
+
+I checked the relevant issues, comments, pull requests, discussions, and `iperf-dev` search results; this pull request is not a duplicate.
+
+### Disclosure
+
+Investigated thoroughly with GPT-5.6 (extra high reasoning effort), using [Oh My Pi](https://github.com/can1357/oh-my-pi) as the agent framework.
+
+This report is not generic or unreviewed AI-generated output. Its claims were checked against the cited evidence, and it includes the relevant detail intended to help maintainers resolve the issue.
+
+If reports like this are not useful to the project, please let me know and I will refrain from submitting similar ones. My intent is to help without wasting maintainer time or energy or discouraging their work.
+
+Thank you for your work.
+````
