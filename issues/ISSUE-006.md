@@ -21,7 +21,7 @@ Reach [S]: Both roles create one worker for every established stream at `TEST_RU
 
 Impact [S]: A hard stream read/write failure maps to `IESTREAMREAD` or `IESTREAMWRITE`, but the failed worker exits without telling the main loop to stop. The main loop can continue timing/reporting until an independent control, timeout, or lifecycle event intervenes.
 
-Impact [N]: Reproduction, affected duration, displayed zero-throughput intervals, exit status, and behavior by transport/mode are not measured on the recorded revision. Do not treat the source proof as an observed hang.
+Impact [O]: With two TCP streams, a deterministic `EIO` from the first sender worker's 32nd data-socket `write()` caused that stream to report zero throughput for the remaining three one-second intervals while the sibling stream and both role main loops completed the configured four seconds. Client-worker and server-worker injections both produced normal summaries, `iperf Done`, and exit status 0; neither role reported the transfer error.
 
 ## Evidence
 
@@ -36,18 +36,21 @@ Impact [N]: Reproduction, affected duration, displayed zero-throughput intervals
 - [O] https://github.com/esnet/iperf/issues/1986 was open when read on 2026-08-14. It records the sudden-client-disconnect server hang; its reporter-visible symptom alone does not establish this record's worker-to-main-loop root.
 - [O] https://github.com/esnet/iperf/pull/1654 was open when read on 2026-08-14. It proposes a shared running-worker counter decremented on worker error and checked by each main loop.
 - [O] https://github.com/esnet/iperf/pull/1861 was open when read on 2026-08-14. It adds a diagnostic for worker failure, not the missing terminal propagation.
+- [O] Client-worker injection: `LD_PRELOAD=/tmp/iperf-worker-fail.so IPERF_INJECT_ROLE=connect IPERF_INJECT_AFTER=32 src/iperf3 -c 127.0.0.1 -p 55221 -t 4 -i 1 -P 2` marked the first data socket, injected `EIO`, printed three subsequent `0.00 bits/sec` intervals for that stream, printed `iperf Done`, and exited 0 after 4.06 seconds.
+- [O] Server-worker injection: the server used the same preload with `IPERF_INJECT_ROLE=accept`; `src/iperf3 -c 127.0.0.1 -p 55223 -R -t 4 -i 1 -P 2` observed the failed server-sender stream at `0.00 bits/sec` for the remaining intervals. Client and one-off server both exited 0 after normal result exchange.
+- [O] Injector boundary: it identifies the second connected or accepted socket as the first data stream, lets 31 writes succeed, then returns `-1` with `errno=EIO` for that socket only; the control socket and second data stream remain live.
 
 ## Prior art
 
 Coverage [O]: Direct-read https://github.com/esnet/iperf/issues/1986, https://github.com/esnet/iperf/pull/1654, and https://github.com/esnet/iperf/pull/1861 on 2026-08-14; source anchors were checked at the recorded canonical revision.
 
-Gaps [N]: GitHub Discussions, `iperf-dev` archives, releases, commits outside the cited PRs, and unpublished branches remain unchecked. No fresh local reproduction yet establishes whether new evidence would materially advance the existing thread.
+Gaps [N]: GitHub Discussions, `iperf-dev` archives, releases, commits outside the cited PRs, and unpublished branches remain unchecked. PR #1654 has not been rebased or run against the deterministic injector.
 
 - https://github.com/esnet/iperf/issues/1986 — Existing symptom thread; #1654 targets the missing worker-to-main-loop propagation. Do not open a duplicate thread.
 - https://github.com/esnet/iperf/pull/1654 — Active correction: it owns the direct propagation direction; opening a parallel issue or pull request would duplicate active work.
 - https://github.com/esnet/iperf/pull/1861 — Related diagnostics: visibility is useful, but printing an error alone does not stop the test.
 
-Target fit: #1654 is the canonical active correction; do not create a new issue or pull request. Comment on #1986 only if a current-master reproduction adds a precise failure path or outcome absent from #1654. Mode and Target remain user-unselected.
+Target fit: A comment on #1654 is the smallest useful target after its current dirty diff is rebased and tested with this injector. The reproduction proves silent partial success on both roles, but does not yet prove #1654 preserves the originating stream error or avoids cleanup races. Mode and Target remain user-unselected.
 
 ## Direction
 
@@ -63,23 +66,33 @@ Track the active #1654 correction rather than design a competing path: it detect
 
 ## Verification
 
-- [A] Inject one hard `sp->snd` and one hard `sp->rcv` failure after workers start; require both `iperf_run_client` and `iperf_run_server` to enter one terminal cleanup path and return the captured terminal error without further interval output.
-- [A] Repeat the injection for TCP, UDP, and SCTP where configured; cover forward, reverse, bidirectional, and `-P 1`/`-P 2` to prove stream-count and direction boundaries.
-- [A] Confirm normal completion, server reuse, control-channel failure, JSON, JSON streaming, and a worker-creation failure retain their existing state/error behavior.
-- Test decision: none — this ledger-only assignment changed no source or tests; no gate was run.
+- [O] One client-sender and one server-sender hard failure were injected after two TCP workers started; both main loops continued through three zero-throughput intervals for the failed stream and returned success.
+- [O] The unaffected stream, control exchange, result exchange, summaries, and normal four-second duration remained live, isolating worker-to-main-loop propagation from peer or control failure.
+- [A] Apply the current #1654 direction and require each reproduced run to enter one terminal cleanup path, preserve the originating `IESTREAMWRITE`, emit no post-failure intervals or successful summary, and return nonzero.
+- [A] Extend only after the TCP candidate passes: inject receive failure; cover UDP/SCTP where configured, forward/reverse/bidirectional, `-P 1`/`-P 2`, JSON modes, normal completion, server reuse, control failure, and worker-creation failure.
+- Test decision: none — reproduction used an external preload injector and changed no repository source or tests.
 
 ## Missing
 
-- [N] A minimal current-master reproduction of hard transfer I/O failure and the client/server result.
-- [N] Verification that #1654's active diff handles the reproduced failure without a counter/cleanup race.
+- [N] Verification that #1654's current dirty diff handles the reproduced client/server failures while preserving `IESTREAMWRITE` and exactly-once cleanup.
+- [N] Receive-worker, UDP, SCTP, bidirectional, JSON, platform, and normal-path candidate coverage.
 - [N] Prior-art coverage for Discussions, mailing list, releases, broader commit history, and unpublished work.
 - [N] User selection of Mode and Target.
 
 ## Resume
 
-Index: Reproduce worker exit
-Next: Inject one hard send or receive failure after two current-master workers start, then capture both roles' state transition, final output, and return status.
-Done when: The recorded run shows whether a dead worker independently causes terminal cleanup and identifies evidence that would add value to #1986/#1654.
+Index: Verify PR 1654 propagation
+Next: Rebase or reconstruct #1654's worker-propagation change on current master and run both deterministic TCP injections while tracing terminal error and cleanup.
+Done when: Both roles terminate promptly with the originating stream error and one cleanup path, or a precise counter/error-preservation defect is recorded for #1654.
+
+## Bug reproduction
+
+Environment: iperf 3.21+ at `upstream/master@c9b74229d0d9bfec6d2307b66b43c29a7665ad0b`; Ubuntu 24.04.4 LTS; Linux 6.8.0-107-generic; x86_64; glibc; localhost TCP.
+Injection: An `LD_PRELOAD` interposer marks the first data socket after the control connection and returns `-1/EIO` from its 32nd and later `write()` calls without closing that data socket or disturbing the control socket or sibling stream.
+Client role: Normal server plus injected `-t 4 -i 1 -P 2` forward client.
+Server role: Injected one-off server plus normal `-R -t 4 -i 1 -P 2` client.
+Actual [O]: In each role, one worker silently stopped, its stream reported zero for intervals 1–4, the sibling stream continued, result exchange completed, and both processes returned success.
+Expected: The owning role must detect the worker's hard transfer failure, stop the test promptly, preserve `IESTREAMWRITE`, run cleanup once, and return failure rather than a valid-looking partial result.
 
 ## API and compatibility
 
