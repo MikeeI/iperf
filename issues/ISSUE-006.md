@@ -39,22 +39,28 @@ Impact [O]: With two TCP streams, a deterministic `EIO` from the first sender wo
 - [O] Client-worker injection: `LD_PRELOAD=/tmp/iperf-worker-fail.so IPERF_INJECT_ROLE=connect IPERF_INJECT_AFTER=32 src/iperf3 -c 127.0.0.1 -p 55221 -t 4 -i 1 -P 2` marked the first data socket, injected `EIO`, printed three subsequent `0.00 bits/sec` intervals for that stream, printed `iperf Done`, and exited 0 after 4.06 seconds.
 - [O] Server-worker injection: the server used the same preload with `IPERF_INJECT_ROLE=accept`; `src/iperf3 -c 127.0.0.1 -p 55223 -R -t 4 -i 1 -P 2` observed the failed server-sender stream at `0.00 bits/sec` for the remaining intervals. Client and one-off server both exited 0 after normal result exchange.
 - [O] Injector boundary: it identifies the second connected or accepted socket as the first data stream, lets 31 writes succeed, then returns `-1` with `errno=EIO` for that socket only; the control socket and second data stream remain live.
+- [O] PR #1654 reconstruction: its four commits at `d7ab0713d95ab163825a75d8b9772092ca49117d` replayed onto current master after one mechanical `iperf_error.c` conflict; the candidate built successfully.
+- [O] Candidate client failure: the injected client exited 1 after about one second, but replaced `IESTREAMWRITE/EIO` with `IEPTHREADNOTRUNNING`, emitted two copies of the first interval, and sent `IPERF_DONE`; the server logged repeated late receives in `IPERF_DONE` before cleanup.
+- [O] Candidate server failure: the reverse client exited 1 after `SERVER_ERROR`, but the server replaced `IESTREAMWRITE/EIO`, called cleanup twice, continued into the loop with closed descriptors, and ended with `select failed: Bad file descriptor`; the one-off server process still exited 0 under the existing CLI server contract.
+- [O] Candidate thread-creation regression: faulting the second client `pthread_create()` caused exit 139. Current master under the same injector cleanly reported `unable to create thread` and exited 1.
+- [O] Candidate normal reverse regression: four successful forward/reverse tests across `-P 2` and `-P 1` all returned 0, but each reverse server teardown logged false `Server Worker Thread ... Bad file descriptor` errors.
+- [O] Candidate JSON behavior: full JSON exited 1 with generic `a thread stopped running unexpectedly`, two intervals, and an `end` object; streaming JSON emitted `start,interval,interval,error,end`, with only its diagnostic event retaining the originating `IESTREAMWRITE/EIO` text.
 
 ## Prior art
 
 Coverage [O]: Direct-read https://github.com/esnet/iperf/issues/1986, https://github.com/esnet/iperf/pull/1654, and https://github.com/esnet/iperf/pull/1861 on 2026-08-14; source anchors were checked at the recorded canonical revision.
 
-Gaps [N]: GitHub Discussions, `iperf-dev` archives, releases, commits outside the cited PRs, and unpublished branches remain unchecked. PR #1654 has not been rebased or run against the deterministic injector.
+Gaps [N]: GitHub Discussions, `iperf-dev` archives, releases, commits outside the cited PRs, and unpublished branches remain unchecked. Receive-worker, UDP/SCTP failure, bidirectional, and supported-platform candidate behavior remain untested because the TCP sender candidate already violates root error, cleanup, creation, and normal reverse contracts.
 
 - https://github.com/esnet/iperf/issues/1986 — Existing symptom thread; #1654 targets the missing worker-to-main-loop propagation. Do not open a duplicate thread.
-- https://github.com/esnet/iperf/pull/1654 — Active correction: it owns the direct propagation direction; opening a parallel issue or pull request would duplicate active work.
+- https://github.com/esnet/iperf/pull/1654 — Active but currently unsafe correction: reconstructed current-master testing proves error replacement, double cleanup, a creation-failure crash, and false normal-teardown diagnostics.
 - https://github.com/esnet/iperf/pull/1861 — Related diagnostics: visibility is useful, but printing an error alone does not stop the test.
 
-Target fit: A comment on #1654 is the smallest useful target after its current dirty diff is rebased and tested with this injector. The reproduction proves silent partial success on both roles, but does not yet prove #1654 preserves the originating stream error or avoids cleanup races. Mode and Target remain user-unselected.
+Target fit: Pull request comment on #1654 is recommended. The current-master reconstruction supplies four concrete regressions and a deterministic reproducer that materially advance the active correction. Mode and Target remain user-unselected; do not publish without user selection and exact-draft approval.
 
 ## Direction
 
-Track the active #1654 correction rather than design a competing path: it detects a worker that terminates on error from the owning role loop. A reproduction must capture the terminal `i_errno`; counter-based detection alone does not prove that the originating `IESTREAMREAD` or `IESTREAMWRITE` remains the caller-visible diagnostic. Do not substitute diagnostics alone, poll `pthread_kill`, suppress the error, or merge this work with teardown ordering in ISSUE-007.
+Track #1654 rather than open competing work, but reject its current counter/thread-number ownership. A correction should store each worker's terminal outcome in test- or stream-owned synchronized state, preserve the first `IESTREAMREAD`/`IESTREAMWRITE` and native `errno`, retain `thread_created` as lifecycle truth independent of diagnostic numbering, and return immediately after one owning cleanup. Do not use role-global counters, overwrite the root error with `IEPTHREADNOTRUNNING`, treat expected teardown syscalls as worker failures, or continue the server loop after cleanup.
 
 ## Bounds
 
@@ -66,24 +72,24 @@ Track the active #1654 correction rather than design a competing path: it detect
 
 ## Verification
 
-- [O] One client-sender and one server-sender hard failure were injected after two TCP workers started; both main loops continued through three zero-throughput intervals for the failed stream and returned success.
-- [O] The unaffected stream, control exchange, result exchange, summaries, and normal four-second duration remained live, isolating worker-to-main-loop propagation from peer or control failure.
-- [A] Apply the current #1654 direction and require each reproduced run to enter one terminal cleanup path, preserve the originating `IESTREAMWRITE`, emit no post-failure intervals or successful summary, and return nonzero.
-- [A] Extend only after the TCP candidate passes: inject receive failure; cover UDP/SCTP where configured, forward/reverse/bidirectional, `-P 1`/`-P 2`, JSON modes, normal completion, server reuse, control failure, and worker-creation failure.
-- Test decision: none — reproduction used an external preload injector and changed no repository source or tests.
+- [O] The reconstructed candidate detects both injected sender failures and makes both clients exit 1 within about one second.
+- [O] It fails the required contracts: originating error preservation, exactly-once cleanup, safe partial thread creation, quiet successful reverse teardown, and server terminal return ownership.
+- [O] Normal forward/reverse `-P 1`/`-P 2`, normal full/streaming JSON, `make -s check` (5/5), and isolated `test_commands.sh 127.0.0.1` completed; the command script's SCTP and IPv6 scenarios remained unavailable in this build/IPv4 namespace.
+- [O] The normal-path command suite did not emit worker-failure diagnostics, but focused short reverse server reuse did, proving a timing-sensitive teardown regression not covered by the repository checks.
+- Test decision: none — verification replayed the external PR in an isolated worktree and used an external preload injector; no owned source or tests changed.
 
 ## Missing
 
-- [N] Verification that #1654's current dirty diff handles the reproduced client/server failures while preserving `IESTREAMWRITE` and exactly-once cleanup.
-- [N] Receive-worker, UDP, SCTP, bidirectional, JSON, platform, and normal-path candidate coverage.
+- [N] An exact #1654 comment draft and user-selected Report/PR-comment target.
+- [N] Maintainer response or a revised candidate addressing the four reproduced regressions.
+- [N] Receive-worker, UDP/SCTP failure, bidirectional, FreeBSD, and macOS verification for any revised candidate.
 - [N] Prior-art coverage for Discussions, mailing list, releases, broader commit history, and unpublished work.
-- [N] User selection of Mode and Target.
 
 ## Resume
 
-Index: Verify PR 1654 propagation
-Next: Rebase or reconstruct #1654's worker-propagation change on current master and run both deterministic TCP injections while tracing terminal error and cleanup.
-Done when: Both roles terminate promptly with the originating stream error and one cleanup path, or a precise counter/error-preservation defect is recorded for #1654.
+Index: Draft PR 1654 findings
+Next: Prepare an exact PR #1654 comment with the injector contract, four reproduced regressions, and bounded ownership direction.
+Done when: The complete comment and exact target are ready for user review without publishing.
 
 ## Bug reproduction
 
