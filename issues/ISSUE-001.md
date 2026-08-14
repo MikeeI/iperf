@@ -1,9 +1,9 @@
 # ISSUE-001 — JSON lifecycle: rendered output survives persistent server reset
 
-State: Ready
+State: Published
 Mode: Pull request
 Target: New pull request
-Location: Not published.
+Location: https://github.com/esnet/iperf/pull/2067
 Priority: High
 Confidence: High
 Type: performance
@@ -70,14 +70,14 @@ At the reset lifecycle owner, release `test->json_output_string` with the existi
 
 ## Missing
 
-- [N] FreeBSD and macOS runtime verification is unperformed; the correction uses the existing portable `free`-and-NULL ownership pattern.
+- [N] No publication blocker remains. FreeBSD and macOS runtime verification is unperformed; the correction uses the existing portable `free`-and-NULL ownership pattern.
 - [N] Release-note and active unpublished-branch prior-art coverage remains unchecked.
 
 ## Resume
 
-Index: Review exact JSON reset PR
-Next: Obtain approval for the recorded upstream target and exact pull request draft.
-Done when: The user approves the unchanged target and complete draft for publication.
+Index: Monitor PR 2067
+Next: Monitor upstream checks and maintainer review on pull request #2067.
+Done when: The pull request merges, closes, or receives feedback requiring a bounded response or revision.
 
 ## Bug reproduction
 
