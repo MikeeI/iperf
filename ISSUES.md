@@ -18,7 +18,7 @@ Next finding ID: ISSUE-027
 | [ISSUE-003](issues/ISSUE-003.md) | interval reporting: flush policy executes once per stream line | Hold | Undecided | Undecided | Medium | Measure interval flush costs | Not published. |
 | [ISSUE-004](issues/ISSUE-004.md) | interval state: sole retained result node is reallocated every callback | Hold | Undecided | Undecided | Medium | Profile interval allocator churn | Not published. |
 | [ISSUE-005](issues/ISSUE-005.md) | JSON reporting: unused human-readable units are formatted every interval | Hold | Undecided | Undecided | Medium | Profile JSON formatting waste | Not published. |
-| [ISSUE-006](issues/ISSUE-006.md) | transfer workers: failed I/O exits without main-loop propagation | Hold | Undecided | Undecided | High | Draft PR 1654 findings | Not published. |
+| [ISSUE-006](issues/ISSUE-006.md) | transfer workers: failed I/O exits without main-loop propagation | Drafted | Report | Pull request comment | High | Review PR 1654 comment | Not published. |
 | [ISSUE-007](issues/ISSUE-007.md) | server duration timer: frees live stream before join | Hold | Undecided | Undecided | High | Reproduce timer free race | Not published. |
 | [ISSUE-008](issues/ISSUE-008.md) | client completion: failed final control write is reported as success | Hold | Undecided | Undecided | High | Inject final control failure | Not published. |
 | [ISSUE-009](issues/ISSUE-009.md) | control cleanup: preserve primary diagnostic | Hold | Undecided | Undecided | High | Preserve primary cleanup error | Not published. |

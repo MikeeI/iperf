@@ -1,8 +1,8 @@
 # ISSUE-006 — transfer workers: failed I/O exits without main-loop propagation
 
-State: Hold
-Mode: Undecided
-Target: Undecided
+State: Drafted
+Mode: Report
+Target: Pull request comment
 Location: Not published.
 Priority: High
 Confidence: High
@@ -80,16 +80,15 @@ Track #1654 rather than open competing work, but reject its current counter/thre
 
 ## Missing
 
-- [N] An exact #1654 comment draft and user-selected Report/PR-comment target.
-- [N] Maintainer response or a revised candidate addressing the four reproduced regressions.
+- [N] User approval of the exact PR #1654 target and complete comment draft.
+- [N] Maintainer response or a revised candidate addressing the reproduced regressions.
 - [N] Receive-worker, UDP/SCTP failure, bidirectional, FreeBSD, and macOS verification for any revised candidate.
-- [N] Prior-art coverage for Discussions, mailing list, releases, broader commit history, and unpublished work.
 
 ## Resume
 
-Index: Draft PR 1654 findings
-Next: Prepare an exact PR #1654 comment with the injector contract, four reproduced regressions, and bounded ownership direction.
-Done when: The complete comment and exact target are ready for user review without publishing.
+Index: Review PR 1654 comment
+Next: Obtain user approval for the recorded PR #1654 target and exact comment.
+Done when: The user approves the unchanged target and complete draft for publication.
 
 ## Bug reproduction
 
@@ -109,3 +108,61 @@ Contract [S]: A terminal transfer I/O failure is classified as `IESTREAMWRITE` o
 Compatibility: Preserve the control wire format and successful mixed-version behavior. A peer without worker-failure propagation may still follow its current protocol path; the local process must not wait indefinitely for a worker it knows has failed.
 
 Migration: None.
+
+## Draft
+
+Target: Pull request comment on https://github.com/esnet/iperf/pull/1654.
+
+````markdown
+Hi, thanks for working on this.
+
+I reproduced the underlying missing worker-to-main-loop propagation on current [`master@c9b7422`](https://github.com/esnet/iperf/commit/c9b74229d0d9bfec6d2307b66b43c29a7665ad0b), then replayed all four commits from this PR through [`d7ab071`](https://github.com/esnet/iperf/tree/d7ab0713d95ab163825a75d8b9772092ca49117d) onto that revision. The replay needed only one mechanical conflict resolution in the expanded `iperf_error.c` switch.
+
+The fault injector keeps the control socket and second data stream live, selects the first data socket after the control connection, lets 31 `write()` calls succeed, then returns `-1` with `errno=EIO` for that socket. I ran it against client and server sender workers with `-t 4 -i 1 -P 2`; the server case used `-R`.
+
+The PR detects both worker failures, but I found these regressions:
+
+1. **The originating stream error is replaced.** The worker correctly reports `unable to write to stream socket: Input/output error`, but the main loop overwrites `IESTREAMWRITE/EIO` with `IEPTHREADNOTRUNNING`. The client-facing result becomes `a thread stopped running unexpectedly: `, including a trailing colon without native error detail. The client exits 1 after about one second but emits the first interval twice before cleanup.
+
+2. **The server continues after destructive cleanup.** On the server-worker injection, the client receives the generic `SERVER_ERROR`, while the server calls `cleanup_server(test)` and then continues its event loop. The observed tail was:
+
+```text
+State set to SERVER_ERROR
+All threads stopped
+All threads stopped
+select failed: Bad file descriptor
+```
+
+This replaces the root transfer error with a secondary `select()` failure and executes cleanup twice.
+
+3. **A partial `pthread_create()` failure now crashes.** `thread_number` is assigned before `pthread_create()`, while cleanup treats `thread_number > 0` as proof that the thread exists. Faulting the second creation with `EAGAIN` made the reconstructed PR exit 139. Current master under the same injector cleanly reports `unable to create thread` and exits 1. Keeping `thread_created` separate from diagnostic numbering avoids canceling or joining an uncreated thread.
+
+4. **Normal reverse teardown emits false worker failures.** Successful persistent-server forward/reverse runs with both `-P 2` and `-P 1` returned 0, but each reverse teardown logged errors such as:
+
+```text
+Server Worker Thread 1 FD 5 failed - unable to write to stream socket: Bad file descriptor
+```
+
+The worker is classifying an expected teardown race as a transfer failure.
+
+There are two related ownership problems in the current approach:
+
+- `running_threads` is role-global `static volatile`, not test-owned. Workers modify it under `running_mutex`, but main loops read it without that mutex; `volatile` does not provide synchronization.
+- Workers call `iperf_err()` directly, moving text, JSON-stream, logfile, and callback output into worker-thread context. In JSON streaming, the observed sequence was `start, interval, interval, error, end`; full JSON contained the generic error, two intervals, and an `end` object.
+
+The reconstructed candidate built successfully, `make -s check` passed 5/5, and `test_commands.sh 127.0.0.1` exited 0. Those checks did not catch the partial-creation crash or the timing-sensitive reverse teardown diagnostics.
+
+Would it make sense to keep worker completion as test- or stream-owned synchronized state containing the first exact `i_errno` and native `errno`, retain `thread_created` as independent lifecycle truth, and let only the owning main loop report the error and enter one cleanup path followed by an immediate return?
+
+I checked the existing PR body and discussion; these current-master reproduction results and regressions were not already reported.
+
+### Disclosure
+
+Investigated thoroughly with GPT-5.6 (extra high reasoning effort), using [Oh My Pi](https://github.com/can1357/oh-my-pi) as the agent framework.
+
+This report is not generic or unreviewed AI-generated output. Its claims were checked against the cited evidence, and it includes the relevant detail intended to help maintainers resolve the issue.
+
+If reports like this are not useful to the project, please let me know and I will refrain from submitting similar ones. My intent is to help without wasting maintainer time or energy or discouraging their work.
+
+Thank you for your work.
+````
