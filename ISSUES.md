@@ -13,7 +13,7 @@ Next finding ID: ISSUE-027
 
 | ID | Finding | State | Mode | Target | Priority | Next | Location |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| [ISSUE-001](issues/ISSUE-001.md) | JSON lifecycle: rendered output survives persistent server reset | Published | Pull request | New pull request | High | Monitor PR 2067 | https://github.com/esnet/iperf/pull/2067 |
+| [ISSUE-001](issues/ISSUE-001.md) | JSON lifecycle: rendered output survives persistent server reset | Published | Pull request | New pull request | High | Await PR 2067 CI action | https://github.com/esnet/iperf/pull/2067 |
 | [ISSUE-002](issues/ISSUE-002.md) | server output: result packaging repeatedly rescans accumulated text | Hold | Undecided | Undecided | Medium | Measure output assembly scaling | Not published. |
 | [ISSUE-003](issues/ISSUE-003.md) | interval reporting: flush policy executes once per stream line | Hold | Undecided | Undecided | Medium | Measure interval flush costs | Not published. |
 | [ISSUE-004](issues/ISSUE-004.md) | interval state: sole retained result node is reallocated every callback | Hold | Undecided | Undecided | Medium | Profile interval allocator churn | Not published. |

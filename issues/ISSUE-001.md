@@ -35,6 +35,8 @@ Impact [O]: With identical 32-stream, 1-second localhost tests, full JSON increa
 - [O] Control=`src/iperf3 -s --json-stream -p 55203` with the same clients — total RSS was 3,708 KiB at run 0, 4,500 KiB at run 20, and 4,540 KiB at run 40; heap RSS was 12, 248, and 288 KiB. The warm 20–40 interval added only 2.0 KiB/run.
 - [N] GitHub Discussions and `iperf-dev` searches for `json_output_string`, JSON memory leaks, and persistent-server memory found no direct candidate on 2026-08-14.
 - [N] Upstream issue, PR, and commit searches for `json_output_string reset leak OR memory` and `json_output_string reset` returned no direct candidate on 2026-08-14.
+- [O] PR #2067 status on 2026-08-14: open and mergeable at `3bb3582a128c6f90f8a368118f8271ea93ad4d42`, but GitHub reports `mergeStateStatus=UNSTABLE`; no reviews, review requests, comments, or status-check rollup exist.
+- [O] GitHub Actions run https://github.com/esnet/iperf/actions/runs/31757951157 completed immediately with `action_required` and zero jobs, so no upstream CI test has executed.
 
 ## Prior art
 
@@ -70,14 +72,15 @@ At the reset lifecycle owner, release `test->json_output_string` with the existi
 
 ## Missing
 
-- [N] No publication blocker remains. FreeBSD and macOS runtime verification is unperformed; the correction uses the existing portable `free`-and-NULL ownership pattern.
+- [N] GitHub marks the Build Test `action_required`, but exposes zero jobs and no exact cause; no CI result or maintainer review exists yet.
+- [N] FreeBSD and macOS runtime verification is unperformed; the correction uses the existing portable `free`-and-NULL ownership pattern.
 - [N] Release-note and active unpublished-branch prior-art coverage remains unchecked.
 
 ## Resume
 
-Index: Monitor PR 2067
-Next: Monitor upstream checks and maintainer review on pull request #2067.
-Done when: The pull request merges, closes, or receives feedback requiring a bounded response or revision.
+Index: Await PR 2067 CI action
+Next: Monitor Actions run #31757951157 and PR #2067 for workflow execution, review, or maintainer feedback.
+Done when: CI executes, maintainers respond, or the pull request reaches an observable disposition.
 
 ## Bug reproduction
 
