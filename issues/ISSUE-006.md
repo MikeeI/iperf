@@ -1,9 +1,9 @@
 # ISSUE-006 — transfer workers: failed I/O exits without main-loop propagation
 
-State: Drafted
+State: Published
 Mode: Report
 Target: Pull request comment
-Location: Not published.
+Location: https://github.com/esnet/iperf/pull/1654#issuecomment-5288277182
 Priority: High
 Confidence: High
 Type: reliability
@@ -80,15 +80,14 @@ Track #1654 rather than open competing work, but reject its current counter/thre
 
 ## Missing
 
-- [N] User approval of the exact PR #1654 target and complete comment draft.
-- [N] Maintainer response or a revised candidate addressing the reproduced regressions.
-- [N] Receive-worker, UDP/SCTP failure, bidirectional, FreeBSD, and macOS verification for any revised candidate.
+- [N] No publication blocker remains. Maintainer response or a revised candidate addressing the reproduced regressions is pending.
+- [N] Receive-worker, UDP/SCTP failure, bidirectional, FreeBSD, and macOS verification remains for any revised candidate.
 
 ## Resume
 
-Index: Review PR 1654 comment
-Next: Obtain user approval for the recorded PR #1654 target and exact comment.
-Done when: The user approves the unchanged target and complete draft for publication.
+Index: Monitor PR 1654 response
+Next: Monitor PR #1654 for maintainer response or a revised worker-propagation candidate.
+Done when: Maintainers respond, the candidate changes, or the pull request reaches an observable disposition.
 
 ## Bug reproduction
 
